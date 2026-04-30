@@ -60,8 +60,11 @@ export default function Home() {
       setProgress(70);
       setViewState('graph');
 
-      // Enrich edges in background
-      const enrichedEdges = await enrichEdges(initNodes, fetchFileRef.current);
+      // Enrich edges in background (limit source files for speed)
+      const sourceNodes = initNodes
+        .filter((n) => ['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs'].includes(n.ext))
+        .slice(0, 100);
+      const enrichedEdges = await enrichEdges(sourceNodes, fetchFileRef.current);
       setEdges(enrichedEdges);
       setProgress(100);
     } catch (err: unknown) {
@@ -226,20 +229,16 @@ export default function Home() {
   );
 }
 
-// ── Helpers (inline to keep it single-file) ──────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function buildGraph(
   tree: Array<{ path: string; size?: number; type: string }>
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const EXT_CATEGORY: Record<string, string> = {
-    ts: 'ts', tsx: 'ts', js: 'js', jsx: 'js',
-    py: 'py', go: 'go', rs: 'rs', java: 'java',
-    json: 'config', yaml: 'config', yml: 'config',
-    toml: 'config', css: 'css', scss: 'css', less: 'css',
-    html: 'html', svg: 'svg', md: 'md', sh: 'sh',
-  };
-
-  const SUPPORTED_EXTS = new Set(['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs', 'java', 'json', 'yaml', 'yml', 'toml', 'css', 'scss', 'less', 'html', 'svg', 'md', 'sh']);
+  const SUPPORTED_EXTS = new Set([
+    'ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs', 'java',
+    'json', 'yaml', 'yml', 'toml', 'css', 'scss', 'less',
+    'html', 'svg', 'md', 'sh',
+  ]);
 
   const nodes: GraphNode[] = tree
     .filter((item) => {
@@ -263,6 +262,12 @@ function buildGraph(
   return { nodes, edges: [] };
 }
 
+// Import patterns per language
+const RE_TS_IMPORT = /\b(?:import\s+(?:(?:\{[^}]+\}|\w+\s*,\s*)*)\s*from\s+['"]([^'"]+)['"]|import\s*\(['"]([^'"]+)['"]\)|require\s*\(['"]([^'"]+)['"]\)|export\s+(?:\{[^}]+\}|\*\s*as\s*\w+|\w+)\s+from\s+['"]([^'"]+)['"])/g;
+const RE_PY_IMPORT = /(?:^from\s+([\w.]+)\s+import|^import\s+([\w.]+))/gm;
+const RE_GO_IMPORT = /import\s+"?(\/.+?)"?/g;
+const RE_RS_IMPORT = /\buse\s+([\w:]+)(?:::[^;]+)?(?:;\s*as\s+\w+)?;/g;
+
 async function enrichEdges(
   nodes: GraphNode[],
   fetchFile: (path: string) => Promise<string>
@@ -270,20 +275,11 @@ async function enrichEdges(
   const edges: GraphEdge[] = [];
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
-  const IMPORT_PATTERNS: Array<RegExp> = [
-    /import\s+.*?from\s+['"]([^'"]+)['"]/g,
-    /import\s*\(['"]([^'"]+)['"]\)/g,
-    /require\s*\(['"]([^'"]+)['"]\)/g,
-    /export\s+.*?from\s+['"]([^'"]+)['"]/g,
-    /from\s+['"]([^'"]+)['"]/g,
-    /^import\s+(\S+)/gm,
-    /^from\s+(\S+)\s+import/gm,
-    /use\s+([A-Za-z0-9_:]+)/g,
-  ];
+  const sourceFiles = nodes.filter((n) =>
+    ['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs'].includes(n.ext)
+  );
 
-  const sourceFiles = nodes.filter((n) => ['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs'].includes(n.ext));
-
-  const BATCH = 6;
+  const BATCH = 10;
   for (let i = 0; i < sourceFiles.length; i += BATCH) {
     const batch = sourceFiles.slice(i, i + BATCH);
     const results = await Promise.allSettled(batch.map((n) => fetchFile(n.path)));
@@ -292,43 +288,81 @@ async function enrichEdges(
       if (results[j].status !== 'fulfilled') continue;
       const content = (results[j] as PromiseFulfilledResult<string>).value;
       const node = batch[j];
-
       const seen = new Set<string>();
+      const ext = node.ext;
 
-      for (const pattern of IMPORT_PATTERNS) {
-        pattern.lastIndex = 0;
+      if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) {
+        RE_TS_IMPORT.lastIndex = 0;
         let m: RegExpExecArray | null;
-        while ((m = pattern.exec(content)) !== null) {
-          let dep = m[1].trim();
-          // Remove query strings / hash
-          dep = dep.split('?')[0].split('#')[0];
+        while ((m = RE_TS_IMPORT.exec(content)) !== null) {
+          const dep = (m[1] || m[2] || m[3] || m[4] || '').trim().split('?')[0].split('#')[0];
           if (!dep || dep.startsWith('http') || dep.startsWith('/')) continue;
-
-          // Resolve relative
-          if (dep.startsWith('.')) {
-            const dir = node.path.split('/').slice(0, -1).join('/');
-            dep = resolveRelative(dir, dep);
-          }
-
-          if (nodeMap.has(dep) && !seen.has(dep)) {
-            seen.add(dep);
-            edges.push({ source: node.id, target: dep });
-          }
-
-          // Try with common extensions
-          for (const ext of ['.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx']) {
-            const candidate = dep + ext;
-            if (nodeMap.has(candidate) && !seen.has(candidate)) {
-              seen.add(candidate);
-              edges.push({ source: node.id, target: candidate });
-            }
-          }
+          addEdgeTS(dep, node.path, seen, edges, nodeMap);
+        }
+      } else if (ext === 'py') {
+        RE_PY_IMPORT.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = RE_PY_IMPORT.exec(content)) !== null) {
+          const dep = (m[1] || m[2] || '').trim();
+          if (!dep) continue;
+          addEdgePy(dep, node.path, seen, edges, nodeMap);
+        }
+      } else if (ext === 'go') {
+        RE_GO_IMPORT.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = RE_GO_IMPORT.exec(content)) !== null) {
+          const dep = (m[1] || '').trim().replace(/^"/, '').replace(/"$/, '');
+          if (!dep) continue;
+          addEdgeGo(dep, node.path, seen, edges, nodeMap);
+        }
+      } else if (ext === 'rs') {
+        RE_RS_IMPORT.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = RE_RS_IMPORT.exec(content)) !== null) {
+          const dep = (m[1] || '').trim();
+          if (!dep) continue;
+          addEdgeRs(dep, node.path, seen, edges, nodeMap);
         }
       }
     }
   }
 
   return edges;
+}
+
+function addEdgeTS(dep: string, srcPath: string, seen: Set<string>, edges: GraphEdge[], nodeMap: Map<string, GraphNode>) {
+  if (!dep) return;
+  if (dep.startsWith('.')) {
+    const dir = srcPath.split('/').slice(0, -1).join('/');
+    dep = resolveRelative(dir, dep);
+  }
+  if (nodeMap.has(dep) && !seen.has(dep)) { seen.add(dep); edges.push({ source: srcPath, target: dep }); return; }
+  for (const ext of ['.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx']) {
+    const cand = dep + ext;
+    if (nodeMap.has(cand) && !seen.has(cand)) { seen.add(cand); edges.push({ source: srcPath, target: cand }); return; }
+  }
+}
+
+function addEdgePy(dep: string, srcPath: string, seen: Set<string>, edges: GraphEdge[], nodeMap: Map<string, GraphNode>) {
+  if (!dep) return;
+  const filePath = dep.split('.').join('/') + '.py';
+  if (nodeMap.has(filePath) && !seen.has(filePath)) { seen.add(filePath); edges.push({ source: srcPath, target: filePath }); return; }
+  const pkgPath = dep.split('.').join('/') + '/__init__.py';
+  if (nodeMap.has(pkgPath) && !seen.has(pkgPath)) { seen.add(pkgPath); edges.push({ source: srcPath, target: pkgPath }); }
+}
+
+function addEdgeGo(dep: string, srcPath: string, seen: Set<string>, edges: GraphEdge[], nodeMap: Map<string, GraphNode>) {
+  if (!dep) return;
+  const goPath = dep + '.go';
+  if (nodeMap.has(goPath) && !seen.has(goPath)) { seen.add(goPath); edges.push({ source: srcPath, target: goPath }); }
+}
+
+function addEdgeRs(dep: string, srcPath: string, seen: Set<string>, edges: GraphEdge[], nodeMap: Map<string, GraphNode>) {
+  if (!dep) return;
+  const rsPath = dep.split('::').join('/') + '.rs';
+  if (nodeMap.has(rsPath) && !seen.has(rsPath)) { seen.add(rsPath); edges.push({ source: srcPath, target: rsPath }); return; }
+  const modPath = dep.split('::').join('/') + '/mod.rs';
+  if (nodeMap.has(modPath) && !seen.has(modPath)) { seen.add(modPath); edges.push({ source: srcPath, target: modPath }); }
 }
 
 function resolveRelative(dir: string, rel: string): string {
