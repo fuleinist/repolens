@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import RepoGraph from '@/components/RepoGraph';
 import FileTree from '@/components/FileTree';
 import StatsPanel from '@/components/StatsPanel';
@@ -21,6 +21,18 @@ export default function Home() {
   const [branch, setBranch] = useState('');
 
   const fetchFileRef = useRef<(path: string) => Promise<string>>(() => Promise.resolve(''));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const handleAnalyze = useCallback(async () => {
     const input = inputValue.trim();
@@ -101,6 +113,7 @@ export default function Home() {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+          ref={inputRef}
           placeholder="e.g. facebook/react or https://github.com/facebook/react"
           className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-md px-3 py-2 text-sm font-mono text-[#c9d1d9] placeholder-[#484f58] focus:outline-none focus:border-[#58a6ff] focus:ring-1 focus:ring-[#58a6ff] transition-colors"
           disabled={viewState === 'loading'}
