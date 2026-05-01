@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RepoLens
+
+**Drop any GitHub repo URL — get an interactive knowledge graph in seconds.**
+
+Understand any codebase at a glance. RepoLens fetches the repository, parses import/dependency relationships, and renders a force-directed knowledge graph showing how files connect.
+
+![RepoLens](docs/demo.png)
+
+## Features
+
+- **Interactive Graph** — D3.js force simulation with drag, zoom, and pan
+- **Import Edge Detection** — Shows actual code relationships (not just file proximity) for TS/TSX/JS/JSX, Python, Go, and Rust
+- **File Tree Sidebar** — Collapsible directory tree synced with the graph
+- **Stats Panel** — File counts, language breakdown, top hub files
+- **Click-to-GitHub** — Click any node to open the file directly
+- **Error Handling** — Graceful handling of invalid URLs, 404s, rate limits
+
+## Tech
+
+- Next.js 16 (App Router)
+- D3.js for graph visualization
+- GitHub REST API (no auth needed for public repos)
+- Tailwind CSS (dark GitHub-inspired theme)
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and paste any public GitHub repo URL.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Paste any of these formats:
+- `owner/repo` — e.g. `facebook/react`
+- Full URL — e.g. `https://github.com/facebook/react`
 
-## Learn More
+The graph renders up to 300 files with import edges for source files.
 
-To learn more about Next.js, take a look at the following resources:
+## Limits (v1)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Public repos only (no auth)
+- Single branch (default branch)
+- Max ~300 files per analysis
+- Edge detection limited to TS/JS/Python/Go/Rust source files
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy
 
-## Deploy on Vercel
+```bash
+npm run build
+npm run start
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Or deploy to Vercel with one click.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+MIT
