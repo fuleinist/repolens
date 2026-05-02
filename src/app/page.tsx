@@ -19,6 +19,7 @@ export default function Home() {
   const [owner, setOwner] = useState('');
   const [repoName, setRepoName] = useState('');
   const [branch, setBranch] = useState('');
+  const [lastInput, setLastInput] = useState('');
 
   const fetchFileRef = useRef<(path: string) => Promise<string>>(() => Promise.resolve(''));
 
@@ -36,6 +37,7 @@ export default function Home() {
       setOwner(parsed.owner);
       setRepoName(parsed.repo);
       setBranch(parsed.defaultBranch);
+      setLastInput(input);
 
       setProgress(50);
 
@@ -198,8 +200,20 @@ export default function Home() {
               <span className="text-[#484f58]">·</span>
               <span className="text-[#484f58] text-[10px]">Drag nodes · Scroll to zoom · Pan to navigate</span>
               <button
+                onClick={() => {
+                  if (lastInput) {
+                    setInputValue(lastInput);
+                    setViewState('idle');
+                    setTimeout(() => handleAnalyze(), 0);
+                  }
+                }}
+                className="text-[#58a6ff] hover:underline"
+              >
+                ↻ Re-analyze
+              </button>
+              <button
                 onClick={() => setViewState('idle')}
-                className="ml-auto text-[#58a6ff] hover:underline"
+                className="text-[#58a6ff] hover:underline"
               >
                 New analysis
               </button>
