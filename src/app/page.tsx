@@ -19,6 +19,7 @@ export default function Home() {
   const [owner, setOwner] = useState('');
   const [repoName, setRepoName] = useState('');
   const [branch, setBranch] = useState('');
+  const [isTruncated, setIsTruncated] = useState(false);
 
   const fetchFileRef = useRef<(path: string) => Promise<string>>(() => Promise.resolve(''));
 
@@ -36,6 +37,7 @@ export default function Home() {
       setOwner(parsed.owner);
       setRepoName(parsed.repo);
       setBranch(parsed.defaultBranch);
+      setIsTruncated(parsed.truncated);
 
       setProgress(50);
 
@@ -218,7 +220,7 @@ export default function Home() {
               {/* Stats overlay */}
               {nodes.length > 0 && (
                 <div className="absolute bottom-3 right-3 w-52 bg-[#161b22]/95 border border-[#30363d] rounded-lg px-3 py-2">
-                  <StatsPanel nodes={nodes} edges={edges} />
+                  <StatsPanel nodes={nodes} edges={edges} isTruncated={isTruncated} />
                 </div>
               )}
             </div>
