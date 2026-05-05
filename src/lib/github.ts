@@ -31,10 +31,11 @@ async function fetchTreeRecursive(
   repo: string,
   branch: string,
   onProgress?: (count: number) => void
-): Promise<GitHubTreeItem[]> {
+): Promise<{ items: GitHubTreeItem[]; truncated: boolean }> {
   const items: GitHubTreeItem[] = [];
   let page = 1;
   const perPage = 100;
+  let truncated = false;
 
   while (true) {
     const res = await fetch(
@@ -57,25 +58,26 @@ async function fetchTreeRecursive(
     }
 
     if (data.truncated) {
+      truncated = true;
       // Still useful — partial tree
       break;
     }
 
     // GitHub returns a single page for small trees
-    if (!data.truncated && page === 1 && data.tree.length < perPage) {
+    if (page === 1 && data.tree.length < perPage) {
       break;
     }
 
-    if (items.length >= (data.truncated ? items.length : data.tree.length)) break;
+    if (items.length >= data.tree.length) break;
     page++;
   }
 
-  return items;
+  return { items, truncated };
 }
 
 export async function fetchRepo(input: string): Promise<ParsedRepo> {
   const { owner, repo } = parseRepoInput(input);
   const branch = await fetchDefaultBranch(owner, repo);
-  const tree = await fetchTreeRecursive(owner, repo, branch);
-  return { owner, repo, defaultBranch: branch, tree };
+  const { items, truncated } = await fetchTreeRecursive(owner, repo, branch);
+  return { owner, repo, defaultBranch: branch, tree: items, truncated };
 }

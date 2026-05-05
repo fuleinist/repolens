@@ -6,9 +6,10 @@ import { getNodeColor } from '@/lib/graph';
 interface StatsPanelProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  isTruncated?: boolean;
 }
 
-export default function StatsPanel({ nodes, edges }: StatsPanelProps) {
+export default function StatsPanel({ nodes, edges, isTruncated }: StatsPanelProps) {
   const totalLines = nodes.reduce((s, n) => s + n.size, 0);
 
   // Language breakdown
@@ -34,6 +35,14 @@ export default function StatsPanel({ nodes, edges }: StatsPanelProps) {
 
   return (
     <div className="space-y-4 text-xs font-mono">
+      {isTruncated && (
+        <div className="bg-[#9e6a03]/20 border border-[#9e6a03]/40 rounded px-2 py-1.5 text-[10px] leading-relaxed">
+          <span className="text-[#d29922] font-semibold">⚠ Partial result: </span>
+          <span className="text-[#c9d1d9]">
+            This repo has more files than we can analyze (showing {nodes.length}).
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <StatBox label="Files" value={nodes.length} />
         <StatBox label="Edges" value={edges.length} />

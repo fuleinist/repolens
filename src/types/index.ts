@@ -34,4 +34,6 @@ export interface ParsedRepo {
   repo: string;
   defaultBranch: string;
   tree: GitHubTreeItem[];
+  /** true when GitHub reported the tree was truncated (repo has >1000 items) */
+  truncated: boolean;
 }
